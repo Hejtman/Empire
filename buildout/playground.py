@@ -1,19 +1,26 @@
-class Student:
-    def __init__(self, name, email, contact, skills, ug=None, pg=None):
-        self.email = email
-        self.contact = contact
-        self.name = name
-        self.skills = [skills]
+class Base1:
+    def __init__(self):
+        print('Base1')
 
-        self.edu = {"ug": [ug], "pg": [pg]}
-
-        self.__private = 1
-        self.__dict__.pop('_{}{}'.format(self.__class__.__name__, '__private'))
-
-james = Student("James", "j@j.com", "", "+1 7789990007", "Python", "CS")
-
-print(vars(james))
+    def get_from_parent(self):
+        return self.get_child_var()
 
 
-import json
-print(json.dumps(vars(james),sort_keys=True, indent=4))
+class Base2:
+    def __init__(self):
+        print('Base2')
+
+
+class Child(Base1, Base2):
+    def __init__(self):
+        Base1.__init__(self)
+        Base2.__init__(self)
+        print('init child')
+        self.a = 8
+
+    def get_child_var(self):
+        return self.a
+
+
+a = Child()
+print(a.get_from_parent())

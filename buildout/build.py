@@ -1,5 +1,4 @@
-import json
-from game import Game
+from Game import Game
 
 
 game = Game(85, 4, 4, 3, 1, 1, 'J14:54:16:41')
