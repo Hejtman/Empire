@@ -1,106 +1,96 @@
 import pickle
 import logging
 from contextlib import suppress
-from config import DATABASE, MAP_GALAXIES
+
+from config import DATABASE
 from location import Location
 
 
 class Database:
-    def __init__(self, spiderweb):
-        self.database_file = DATABASE
-        self.spiderweb = spiderweb
-        self.players = {}
-        self.locations = {}
+    def __init__(self, _spiderweb):
+        self._database_file = DATABASE
+        self._spiderweb = _spiderweb
+        self._players = {}
+        self._locations = {}
 
     def __enter__(self):
         with suppress(FileNotFoundError):
-            self.load()
-            self.map_galaxies()
+            self._load()
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self.save()
+        self._save()
 
-    def load(self):
-        with open(self.database_file, 'rb') as f:
-            self.players = pickle.load(f)
-            self.locations = pickle.load(f)
+    def get_data(self, location):
+        node = self._locations
+        loc = str(location)[1:].split(':')
 
-    def save(self):
-        with open(self.database_file, 'wb') as f:
-            pickle.dump(self.players, f, pickle.HIGHEST_PROTOCOL)
-            pickle.dump(self.locations, f, pickle.HIGHEST_PROTOCOL)
+        galaxy = loc[0]
+        try:
+            self._locations[galaxy]
+        except KeyError:
+            logging.debug('Accessed galaxy data were not found! Mapping whole galaxy: ' + galaxy)
+            self.__map_galaxy(location.galaxy())
 
-    def map_galaxies(self):
-        for g in MAP_GALAXIES:
-            galaxy = Location(g)
-            try:
-                self.get_systems(galaxy).__next__()
-            except StopIteration:
-                logging.debug('No system found for galaxy {}. Updating systems in whole galaxy.'.format(galaxy.full()))
-                self.locations.update({system: None for system in self.spiderweb.parse_galaxy_systems(galaxy)})
+        for l in loc:
+            node = node[l]
+        return node
 
-    def get_systems(self, location):
-        for system in self.locations.keys():
-            if system.is_system() and system in location:
-                yield system
+    def set_astro(self, location, data):
+        # todo: diff day, week
+        node = self._locations
+        loc = str(location)[1:].split(':')
+
+        galaxy = loc[0]
+        astro = loc.pop()
+        try:
+            self._locations[galaxy]
+        except KeyError:
+            logging.debug('Accessed galaxy data were not found! Mapping whole galaxy: ' + galaxy)
+            self.__map_galaxy(location.galaxy())
+
+        for l in loc:
+            node = node[l]
+        node[astro] = data
+
+    def get_first_astros_with_empty_system(self, region):
+        for system_loc, system_node in self.get_data(region).items():
+            if all(a_data.fleets_neutral + a_data.fleets_enemy == 0 for a_loc, a_data in system_node.items()):
+                yield Location("{}:{}:{}".format(region.full(), system_loc, iter(system_node.keys()).__next__()))
 
     def player_info(self, player):
         try:
-            player_info = self.players[player]
+            return self._players[player]
         except KeyError:
-            player_info = self.update_player(player)
-        return player_info
+            return self.update_player_info(player)
 
-    def update_astro(self, astro, report):
-        # TODO: diff
-        logging.debug('update_astro({}, {})'.format(astro.full(), report))
-        self.locations[astro] = report
-
-    def update_player(self, player):
-        # TODO: old names, guilds
-        # TODO: diff
+    def update_player_info(self, player):
         logging.debug('Updating player {} info.'.format(player))
-        self.players[player] = self.spiderweb.sniff_player(player)
-        return self.players[player]
+        self._players[player] = self._spiderweb.sniff_player(player)
+        return self._players[player]
 
-    def get_inactive_players_bases(self, location):
-        for loc, data in self.locations.items():
-            if loc.is_astro() and loc in location and data.base and self.player_info(data.owner).inactive:
-                yield loc
+    def get_free_inactive_players_bases(self, region):
+        for system_loc, system_node in self.get_data(region).items():
+            for astro_loc, astro_data in system_node.items():
+                if astro_data.base and not astro_data.occ and self.player_info(astro_data.owner).inactive:
+                    yield Location("{}:{}:{}".format(region.full(), system_loc, astro_loc))
 
-if __name__ == "__main__":
-    import sys
-    from datetime import datetime
-    from spiderweb import SpiderWeb, AstroData
-    logging.basicConfig(stream=sys.stdout, level=logging.DEBUG, format='%(asctime)-15s %(message)s')
+    def _load(self):
+        with open(self._database_file, 'rb') as f:
+            logging.debug('loading database')
+            self._players = pickle.load(f)
+            self._locations = pickle.load(f)
 
-    sp = SpiderWeb()
-    d = Database(sp)
-    d.database_file += '_test.db'
+    def _save(self):
+        with open(self._database_file, 'wb') as f:
+            logging.debug('saving database')
+            pickle.dump(self._players, f, pickle.HIGHEST_PROTOCOL)
+            pickle.dump(self._locations, f, pickle.HIGHEST_PROTOCOL)
 
-    with d:
-#        print(sp.sniff_system(Location('http://jade.astroempires.com/map.aspx?loc=J14:81:54')))
-        region = Location('http://jade.astroempires.com/map.aspx?loc=J14:63')
-#        for system in tuple(d.get_systems(region)):
-#            for astro, report in sp.sniff_system(system):
-#                d.update_astro(astro, report)
-
-        for l in d.get_inactive_players_bases(region):
-            print(l.full())
-#        d.update_astro(Location("http://jade.astroempires.com/map.aspx?loc=J05:69:55:10"),
-#                       AstroData(neutral_fleet_present=31925, neutral_fleet_incoming=0, debris=0, astro_size='crystalline',
-#                                 base='18570', owner='1707', owner_level=32.46, owner_guild='[/M\\]  Grimmjow (DEOS)',
-#                                 timestamp=datetime.now()))
-
-#        with suppress(KeyError):
-#            print(d.players['test'])
-#        d.update_player(None, 'test')
-
-#        for s in d.get_systems(None, Location('http://jade.astroempires.com/map.aspx?loc=J14:81')):
-#            print(s.full())
-
-#        for location, data in d.locations.items():
-#            print(str(location) + '   ' + str(data))
-
-#        for id, data in d.players.items():
-#            print(id + '   ' + data)
+    def __map_galaxy(self, galaxy):
+        for system in self._spiderweb.parse_galaxy_systems(galaxy):
+            node = self._locations
+            for loc in str(system)[1:].split(':'):
+                try:
+                    node = node[loc]
+                except KeyError:
+                    node[loc] = node = {}

@@ -12,8 +12,9 @@ from selenium.common.exceptions import TimeoutException, NoSuchElementException
 from config import SERVER, EMAIL, PASSWORD, CACHE_DIR
 from location import Location
 
-AstroData = namedtuple('AstroData', 'neutral_fleet_present neutral_fleet_incoming debris astro_size '
-                       + 'base owner owner_level owner_guild timestamp')
+AstroData = namedtuple('AstroData', 'fleet_allay fleet_neutral fleet_enemy '
+                                    'debris base owner occ astro_size timestamp')
+
 PlayerData = namedtuple('PlayerData', 'name guild level eco upgraded age inactive timestamp')
 
 WAIT = 0.2
@@ -71,7 +72,7 @@ class SpiderWeb:
         t = tuple(t.text for t in fleets.find_elements_by_xpath('.//td'))
         return zip(t[::4], t[1::4], t[2::4], t[3::4])
 
-    def move_fleet(self, fleet, destination, wait=1, attempts=10):
+    def move_fleet(self, fleet, destination, wait=1, attempts=3):
         """Move fleet to coordinates.
         
         :param fleet: 'http://jade.astroempires.com/fleet.aspx?fleet=730480'
@@ -149,20 +150,23 @@ class SpiderWeb:
                 base_id = self.__parse_string_between(attributes, base_prefix, '"')
                 owner_id = self.__parse_string_between(attributes, owner_prefix, '"')
                 neutral_fleet = self.__parse_string_between(attributes, '"Neutral: Fleet present: ', '">')
+                neutral_fleet_present = int(neutral_fleet.split(' - ')[0]) if neutral_fleet else 0,
+                neutral_fleet_incoming = int(neutral_fleet.split('Incoming: ')[1]) if neutral_fleet else 0,
                 astro_report = (location, AstroData(
-                    neutral_fleet_present=int(neutral_fleet.split(' - ')[0]) if neutral_fleet else 0,
-                    neutral_fleet_incoming=int(neutral_fleet.split('Incoming: ')[1]) if neutral_fleet else 0,
+                    fleet_allay=0,  # FIXME
+                    fleet_neutral=neutral_fleet_present + neutral_fleet_incoming,
+                    fleet_enemy=0,  # FIXME
                     debris=self.__parse_number_between(attributes, debris_boundary_a, ' Debris', 0),
-                    astro_size=self.__parse_string_between(attributes, 'class="astro astro_', '">'),
                     base="{}/{}{}".format(SERVER, base_prefix, base_id) if base_id else None,
                     owner="{}/{}{}".format(SERVER, owner_prefix, owner_id) if owner_id else None,
-                    owner_level=self.__parse_number_between(attributes, 'Player level ', ' ', 0.0) if owner_id else 0.0,
-                    owner_guild=self.__parse_string_between(attributes, 'style="white-space: nowrap;">', '</a>'),
-                    # TODO: occ J14:81:76:10
+                    occ=None,  # FIXME
+                    astro_size=self.__parse_string_between(attributes, 'class="astro astro_', '">'),
                     timestamp=now
                 ))
                 logging.debug(astro_report)
-                reports.append(astro_report)
+                if astro_report[1].astro_size not in ('asteroid-belt', 'gas-giant'):
+                    reports.append(astro_report)
+
         logging.debug(reports)
         return reports
 
@@ -171,7 +175,11 @@ class SpiderWeb:
         self.update_cache(player.split('player=')[1])
         logging.debug('sniffing player: {}'.format(player))
 
-        attributes = self.__browser.find_element_by_xpath('//*[@id="profile"]').get_attribute("innerHTML")
+        try:
+            attributes = self.__browser.find_element_by_xpath('//*[@id="profile"]').get_attribute("innerHTML")
+        except NoSuchElementException:
+            return PlayerData('United Colonies?', 'Union of NPC colonies?', 0.0, 0, False, 0, False, datetime.now())
+
         logging.debug('attributes: {}'.format(attributes))
         return PlayerData(
             name=self.__parse_string_between(attributes, '<div class="sbox_ctr"><span>', '</span></div><div class="sb'),
@@ -264,40 +272,3 @@ class SpiderWeb:
     def arrival_date(travel_time):
         h, m, s = travel_time.split(':')
         return datetime.now() + timedelta(seconds=int(s), minutes=int(m), hours=int(h))
-
-
-if __name__ == "__main__":
-    import sys
-    logging.basicConfig(stream=sys.stdout, level=logging.DEBUG, format='%(asctime)-15s %(message)s')
-
-    print(type(SpiderWeb.arrival_date('0:00:00')))
-    print(SpiderWeb.arrival_date('0:00:01'))
-    print(SpiderWeb.arrival_date('0:01:00'))
-    print(SpiderWeb.arrival_date('1:00:00'))
-    print(SpiderWeb.arrival_date('24:00:00'))
-    print(SpiderWeb.arrival_date('48:00:00'))
-
-    sp = SpiderWeb()
-    """
-    duration = sp.move_fleet(fleet='http://jade.astroempires.com/fleet.aspx?fleet=730480',
-                             destination='http://jade.astroempires.com/map.aspx?loc=J14:54:16:20')
-
-    arrive = Spider.arrival_date(duration)
-    print('arrive: ' + str(arrive))
-
-    print(sp.sniff_system('http://jade.astroempires.com/map.aspx?loc=J05:69:55'))
-    print(sp.astro_fleets('http://jade.astroempires.com/map.aspx?loc=J05:69:55:10'))
-    sp.get_page('http://jade.astroempires.com/base.aspx?base=21886')
-    sp.update_cache('J05:69:55:10_base')
-    print(list(sp.map_galaxy_systems('http://jade.astroempires.com/map.aspx?loc=J14')))
-
-    report = sp.sniff_system('http://jade.astroempires.com/map.aspx?loc=J14:55:79')
-    for ast in report.items():
-        print(ast)
-
-    print(sp.get_systems("http://jade.astroempires.com/map.aspx?loc=J14:20"))
-    """
-
-    sp.get_page('http://jade.astroempires.com/base.aspx?base=21886')
-    print(sp.sniff_player('http://jade.astroempires.com/profile.aspx?player=1309'))
-    print(sp.sniff_player('http://jade.astroempires.com/profile.aspx?player=464'))
