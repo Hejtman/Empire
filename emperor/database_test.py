@@ -4,6 +4,7 @@ from location import Location
 from database import Database
 from spiderweb import AstroData, PlayerData
 from spiderweb_fake import SpiderWeb
+from spiderweb import SpiderWeb as SpiderWebReal
 
 
 def that_it_maps_galaxy_when_get_data():
@@ -12,6 +13,16 @@ def that_it_maps_galaxy_when_get_data():
     sp.parse_galaxy_systems_ret = (Location('http://jade.astroempires.com/map.aspx?loc=J01:00:01'),
                                    Location('http://jade.astroempires.com/map.aspx?loc=J01:00:02'),
                                    Location('http://jade.astroempires.com/map.aspx?loc=J02:00:00'))
+    astro1_loc = '01'
+    astro1_data = ('astro 1 data 1', 'data 2')
+    astro2_loc = '02'
+    astro2_data = ('astro 2 data 1', 'data 2')
+    astro3_loc = '01'
+    astro3_data = ('data 1', 'data 2')
+    sp.sniff_system_ret[Location('http://jade.astroempires.com/map.aspx?loc=J01:00:01')] = ((astro1_loc, astro1_data),
+                                                                                            (astro2_loc, astro2_data))
+    sp.sniff_system_ret[Location('http://jade.astroempires.com/map.aspx?loc=J01:00:02')] = ()
+    sp.sniff_system_ret[Location('http://jade.astroempires.com/map.aspx?loc=J02:00:00')] = ((astro3_loc, astro3_data),)
     db = Database(sp)
     db._database_file += '_test.db'
 
@@ -20,11 +31,10 @@ def that_it_maps_galaxy_when_get_data():
     data2 = db.get_data(Location('http://jade.astroempires.com/map.aspx?loc=J02:00'))
 
     # then
-    assert data1 == {'01': {}, '02': {}}
-    assert data2 == {'00': {}}
-    assert db._locations == {'01': {'00': {'01': {},
-                                           '02': {}}},
-                             '02': {'00': {'00': {}}}}
+    assert data1 == {'01': {astro1_loc: astro1_data, astro2_loc: astro2_data}}
+    assert data2 == {'00': {astro3_loc: astro3_data}}
+    assert db._locations == {'01': {'00': {'01': {astro1_loc: astro1_data, astro2_loc: astro2_data}}},
+                             '02': {'00': {'00': {astro3_loc: astro3_data}}}}
 
 
 def that_it_maps_galaxy_when_set_data():
@@ -72,11 +82,11 @@ def that_it_gives_free_inactive_players_bases():
     assert inactive_bases.__next__() == Location('http://jade.astroempires.com/map.aspx?loc=J08:04:03:01')
 
 
-if __name__ == "__main__":
+def unit_t_est():
     db = Database(None)
     db._database_file += '_test.db'
-    db._locations['00'] = {'00': {'00': {'00': AstroData(0, 0, 0, 10, 12345, 1234, 4321, datetime.now(), 'rocky')}}}
-    db.set_astro('J00:00:00:01', AstroData(0, 0, 0, 10, 12345, 1234, 4321, datetime.now(), 'rocky'))
+    db._locations['00'] = {'00': {'00': {'00': AstroData(0, 0, 0, 10, 12345, 1234, 4321, 'rocky', datetime.now())}}}
+    db.set_astro('J00:00:00:01', AstroData(0, 0, 0, 10, 12345, 1234, 4321, 'rocky', datetime.now()))
 
     assert db._locations['00'] == db.get_data(Location('http://jade.astroempires.com/map.aspx?loc=J00'))
     assert db._locations['00']['00'] == db.get_data(Location('http://jade.astroempires.com/map.aspx?loc=J00:00'))
@@ -92,5 +102,24 @@ if __name__ == "__main__":
     print(db.get_data(Location('http://jade.astroempires.com/map.aspx?loc=J00:00:00:01')))
 
     that_it_maps_galaxy_when_get_data()
-    that_it_maps_galaxy_when_set_data()
-    that_it_gives_free_inactive_players_bases()
+    #  that_it_maps_galaxy_when_set_data()
+    #  that_it_gives_free_inactive_players_bases()
+
+    with db:
+        for l in db.get_abandoned_derb_piles(Location('http://jade.astroempires.com/map.aspx?loc=J14:44:96:20')):
+            print(l)
+            print(l.distance('J14:44:96:20'))
+            print(db.get_data(l))
+
+
+if __name__ == "__main__":
+    # unit_t_est()
+
+    sp = SpiderWebReal()
+    db = Database(sp)
+    db._database_file += '_test.db'
+
+    with db:
+        for region_loc, region_node in db.get_data(Location('loc=J15')).items():
+            for l in db.get_free_inactive_players_bases(Location('loc=J15', region_loc), min_level=25):
+                print(l.full())

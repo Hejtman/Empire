@@ -12,6 +12,7 @@ from selenium.common.exceptions import TimeoutException, NoSuchElementException
 from config import SERVER, EMAIL, PASSWORD, CACHE_DIR
 from location import Location
 
+# FIXME: namedtuple > dictionary
 AstroData = namedtuple('AstroData', 'fleet_allay fleet_neutral fleet_enemy '
                                     'debris base owner occ astro_size timestamp')
 
@@ -49,7 +50,7 @@ class SpiderWeb:
             time.sleep(WAIT_FOR_PAGE_LOAD)
 
         if self.__browser.current_url != page:
-            raise ValueError('Requested page {}, but got: '.format(page, self.__browser.current_url))
+            raise ValueError('Requested page {}, but got: {}'.format(page, self.__browser.current_url))
 
     def parse_notifications(self):
         """ 
@@ -123,7 +124,7 @@ class SpiderWeb:
         # TODO
         pass
 
-    def sniff_system(self, system):  # FIXME generator
+    def sniff_system(self, system):
         """Check the system and return interesting stuff
         
         :param system: Location('http://jade.astroempires.com/map.aspx?loc=J05:76:35')
@@ -146,23 +147,35 @@ class SpiderWeb:
                 location = Location(loc)
                 debris_boundary_a = '<small><div style="color: Gray; height: 9px;" title="'
                 base_prefix = 'base.aspx?base='
-                owner_prefix = 'profile.aspx?player='
+                player_prefix = 'profile.aspx?player='
+                occ_prefix = '<br><a href="profile.aspx?player='
                 base_id = self.__parse_string_between(attributes, base_prefix, '"')
-                owner_id = self.__parse_string_between(attributes, owner_prefix, '"')
+                owner_id = self.__parse_string_between(attributes, player_prefix, '"')
+                occ_id = self.__parse_string_between(attributes, occ_prefix, '"')
+
+                my_fleet = self.__parse_string_between(attributes, '"Self: Fleet present: ', '">')
+                my_fleet_present = my_fleet.split(' - ')[0] if my_fleet else '0'
+                my_fleet_incoming = my_fleet.split('Incoming: ')[1] if my_fleet else '0'
+
                 neutral_fleet = self.__parse_string_between(attributes, '"Neutral: Fleet present: ', '">')
-                neutral_fleet_present = int(neutral_fleet.split(' - ')[0]) if neutral_fleet else 0,
-                neutral_fleet_incoming = int(neutral_fleet.split('Incoming: ')[1]) if neutral_fleet else 0,
+                neutral_fleet_present = neutral_fleet.split(' - ')[0] if neutral_fleet else '0'
+                neutral_fleet_incoming = neutral_fleet.split('Incoming: ')[1] if neutral_fleet else '0'
+
+                guild_fleet = self.__parse_string_between(attributes, '"Guild: Fleet present: ', '">')
+                guild_fleet_present = guild_fleet.split(' - ')[0] if guild_fleet else '0'
+                guild_fleet_incoming = guild_fleet.split('Incoming: ')[1] if guild_fleet else '0'
+
                 astro_report = (location, AstroData(
-                    fleet_allay=0,  # FIXME
-                    fleet_neutral=neutral_fleet_present + neutral_fleet_incoming,
-                    fleet_enemy=0,  # FIXME
+                    fleet_allay=int(my_fleet_present) + int(my_fleet_incoming) +
+                                int(guild_fleet_present) + int(guild_fleet_incoming),
+                    fleet_neutral=int(neutral_fleet_present) + int(neutral_fleet_incoming),
+                    fleet_enemy=0,
                     debris=self.__parse_number_between(attributes, debris_boundary_a, ' Debris', 0),
                     base="{}/{}{}".format(SERVER, base_prefix, base_id) if base_id else None,
-                    owner="{}/{}{}".format(SERVER, owner_prefix, owner_id) if owner_id else None,
-                    occ=None,  # FIXME
+                    owner="{}/{}{}".format(SERVER, player_prefix, owner_id) if owner_id else None,
+                    occ="{}/{}{}".format(SERVER, player_prefix, occ_id) if occ_id else None,
                     astro_size=self.__parse_string_between(attributes, 'class="astro astro_', '">'),
-                    timestamp=now
-                ))
+                    timestamp=now))
                 logging.debug(astro_report)
                 if astro_report[1].astro_size not in ('asteroid-belt', 'gas-giant'):
                     reports.append(astro_report)
@@ -266,7 +279,7 @@ class SpiderWeb:
     def __parse_number_between(s, a, b, default_value):
         t = type(default_value)
         string = SpiderWeb.__parse_string_between(s, a, b)
-        return t(string) if string else default_value
+        return t(string.replace('.', '').replace(',', '.')) if string else default_value
 
     @staticmethod
     def arrival_date(travel_time):

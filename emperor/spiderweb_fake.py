@@ -23,7 +23,7 @@ class SpiderWeb:
         self.parse_galaxy_systems_ret = ()
         self.get_systems_ret = ()
         self.sniff_base_ret = ""
-        self.sniff_system_ret = ()
+        self.sniff_system_ret = {}
 
     def __del__(self):
         logging.info('Logging out.')
@@ -61,7 +61,7 @@ class SpiderWeb:
 
     def sniff_system(self, system):
         logging.debug("{}({})".format(sys._getframe().f_code.co_name, system))
-        return self.sniff_system_ret
+        return self.sniff_system_ret[system]
 
     def update_cache(self, file):
         logging.debug("{}({})".format(sys._getframe().f_code.co_name, file))

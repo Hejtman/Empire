@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 class Governor:
     def __init__(self, spiderweb, database, name, priority, queue):
 
-        self.spiderweb = spiderweb
+        self._spiderweb = spiderweb
         self.database = database
         self.name = name
         self.priority = priority
@@ -18,7 +18,8 @@ class Governor:
         try:
             self.step()
 
-        except ValueError:  #(IndexError, ValueError, AttributeError, AssertionError):
+        except (ValueError, StopIteration):  # (IndexError, AttributeError, AssertionError):
+            logging.exception("Error in {} execute_step".format(self.name))
             self.fallback()
 
     def step(self):
