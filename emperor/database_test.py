@@ -76,7 +76,7 @@ def that_it_gives_free_inactive_players_bases():
                    9: PlayerData('NAME', 'guild', 3.14, 30, True, 18, False, now)}
 
     # when
-    inactive_bases = db.get_free_inactive_players_bases(Location('http://jade.astroempires.com/map.aspx?loc=J08:04'))
+    inactive_bases = db.get_free_inactive_players_bases_in_region(Location('http://jade.astroempires.com/map.aspx?loc=J08:04'))
 
     # then
     assert inactive_bases.__next__() == Location('http://jade.astroempires.com/map.aspx?loc=J08:04:03:01')
@@ -120,6 +120,8 @@ if __name__ == "__main__":
     db._database_file += '_test.db'
 
     with db:
-        for region_loc, region_node in db.get_data(Location('loc=J15')).items():
-            for l in db.get_free_inactive_players_bases(Location('loc=J15', region_loc), min_level=25):
-                print(l.full())
+        for l in db.get_free_inactive_players_bases(min_level=25):
+            print(l.full())
+
+#        for l in db.get_guild_occs('«o»'):
+#            print(l.full())

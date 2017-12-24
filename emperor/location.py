@@ -2,7 +2,7 @@ from config import  SERVER
 
 
 class Location:
-    def __init__(self, location, region=None, system=None, astro=None, region_int=None):
+    def __init__(self, location, region=None, system=None, astro=None, region_int=None, system_int=None):
         try:
             self.short = location.split('loc=')[1]
         except (AttributeError, IndexError):
@@ -10,6 +10,8 @@ class Location:
 
         if region_int:
             region = '0' + str(region_int) if region_int < 10 else str(region_int)
+        if system_int:
+            system = '0' + str(system_int) if system_int < 10 else str(system_int)
 
         if region:
             self.short += ":" + region
@@ -30,6 +32,12 @@ class Location:
 
     def __hash__(self):
         return hash(self.short)
+
+    def region_int(self):
+        return int(str(self.region())[-2:])
+
+    def system_int(self):
+        return int(str(self.system())[-2:])
 
     # FIXME: attribute?
     def full(self):

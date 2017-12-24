@@ -47,7 +47,7 @@ class Fleet(Governor):
     def find_hiding_place(self, region):
         # FIXME: allay bases first (JG)
         try:
-            loc = self.database.get_free_inactive_players_bases(region).__next__()
+            loc = self.database.get_free_inactive_players_bases_in_region(region).__next__()
             logging.debug('Found hiding place at inactive base: {}'.format(loc.full()))
         except StopIteration:
             try:

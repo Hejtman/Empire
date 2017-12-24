@@ -176,8 +176,9 @@ class SpiderWeb:
                     occ="{}/{}{}".format(SERVER, player_prefix, occ_id) if occ_id else None,
                     astro_size=self.__parse_string_between(attributes, 'class="astro astro_', '">'),
                     timestamp=now))
-                logging.debug(astro_report)
-                if astro_report[1].astro_size not in ('asteroid-belt', 'gas-giant'):
+                if astro_report[1].astro_size not in ('asteroid-belt', 'gas-giant',
+                                                      'asteroid-belt_fog', 'gas-giant_fog'):
+                    logging.debug(astro_report)
                     reports.append(astro_report)
 
         logging.debug(reports)

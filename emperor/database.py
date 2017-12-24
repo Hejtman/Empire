@@ -2,8 +2,12 @@ import pickle
 import logging
 from contextlib import suppress
 
-from config import DATABASE
+from config import DATABASE, SERVER_PREFIX
 from location import Location
+
+
+# TODO: 1) separate usage db (inheritance of db core)
+# TODO: 2) guild fleet check (galaxy)
 
 
 class Database:
@@ -33,6 +37,7 @@ class Database:
 
         for l in loc:
             node = node[l]
+
         return node
 
     def set_astro(self, location, data):
@@ -72,13 +77,20 @@ class Database:
         self._players[player] = self._spiderweb.sniff_player(player)
         return self._players[player]
 
-    def get_free_inactive_players_bases(self, region, min_level=0):
+    def get_free_inactive_players_bases_in_region(self, region, min_level=0):
         for system_loc, system_node in self.get_data(region).items():
             for astro_loc, astro_data in system_node.items():
                 if astro_data.base and not astro_data.occ:
                     player_info = self.player_info(astro_data.owner)
                     if player_info.inactive and player_info.level >= min_level:
                         yield Location("{}:{}:{}".format(region.full(), system_loc, astro_loc))
+
+    def get_free_inactive_players_bases(self, min_level=0):
+        for galaxy_loc, galaxy_node in self._locations.items():
+            for region_loc, region_node in galaxy_node.items():
+                region = Location(SERVER_PREFIX + galaxy_loc, region_loc)
+                for loc in self.get_free_inactive_players_bases_in_region(region, min_level):
+                    yield loc
 
     def get_abandoned_derb_piles(self, location):
         debris = []
@@ -92,6 +104,34 @@ class Database:
         return sorted(debris, key=lambda x:x.distance(location))
 
     # def get_all_enemy_bases_location / neutral
+
+    def get_nearest_astro(self, location, regions):
+        nearest = None
+        for region in regions:
+            region_node = self.get_data(region)
+            for system_loc, system_node in region_node.items():
+                for astro_loc, astro_data in system_node.items():
+                    loc = Location(location=region, system=system_loc, astro=astro_loc)
+                    if not nearest or location.distance(nearest) > location.distance(loc):
+                        nearest = loc
+        return nearest
+
+    def get_player_occs(self, player):
+        for galaxy_loc, galaxy_node in self._locations.items():
+            for region_loc, region_node in galaxy_node.items():
+                for system_loc, system_node in region_node.items():
+                    for astro_loc, astro_data in system_node.items():
+                        if astro_data.occ == player:
+                            print(self.player_info(player))
+                            yield Location(SERVER_PREFIX + galaxy_loc, region_loc, system_loc, astro_loc)
+
+    def get_guild_occs(self, guild):
+        for galaxy_loc, galaxy_node in self._locations.items():
+            for region_loc, region_node in galaxy_node.items():
+                for system_loc, system_node in region_node.items():
+                    for astro_loc, astro_data in system_node.items():
+                        if astro_data.occ and guild in self.player_info(astro_data.occ).name:
+                            yield Location(SERVER_PREFIX + galaxy_loc, region_loc, system_loc, astro_loc)
 
     def _load(self):
         with open(self._database_file, 'rb') as f:
